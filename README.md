@@ -2,7 +2,9 @@
 
 A powerful AI-assisted data transformation platform that collects candidate information from multiple sources, validates it, removes duplicates, resolves conflicts, and generates a single standardized profile.
 
----
+---<img width="1920" height="1080" alt="Screenshot (445)" src="https://github.com/user-attachments/assets/e31448d9-0d86-4206-be00-548cba6b3aca" />
+
+<img width="1050" height="750" alt="feature_importance" src="https://github.com/user-attachments/assets/551f0dad-8914-4c6d-be70-ff0b85cf8582" />
 
 ## 📌 Overview
 
