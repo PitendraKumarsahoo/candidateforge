@@ -5,6 +5,8 @@ import SourceInputsPanel from './components/SourceInputsPanel';
 import PipelineTracePanel from './components/PipelineTracePanel';
 import OutputViewerPanel from './components/OutputViewerPanel';
 import LandingPage from './components/LandingPage';
+import CompanyHiringMode from './components/CompanyHiringMode';
+import { CompanyCandidateDashboard } from './components/CompanyCandidateDashboard';
 import { CanonicalCandidate, RuntimeConfig, PipelineTraceStep } from './pipeline/types';
 import { projectCandidate } from './pipeline/projector';
 import { Menu, FileJson, Cpu, History, FileSpreadsheet, Sparkles, Send, X } from 'lucide-react';
@@ -43,10 +45,11 @@ const INITIAL_STEPS: PipelineTraceStep[] = [
 
 export default function App() {
   const [showLandingPage, setShowLandingPage] = useState(true);
+  const [mode, setMode] = useState<'single' | 'company'>('single');
+  
+  // Single Candidate Mode State
   const [inputs, setInputs] = useState<SourceInputs>(INITIAL_INPUTS);
   const [config, setConfig] = useState<RuntimeConfig>(DEFAULT_CONFIG);
-  
-  // Pipeline State
   const [candidate, setCandidate] = useState<CanonicalCandidate | null>(null);
   const [originalCandidate, setOriginalCandidate] = useState<CanonicalCandidate | null>(null);
   const [projectedOutput, setProjectedOutput] = useState<any>(null);
@@ -97,30 +100,60 @@ export default function App() {
 
   // --- Sample Data Loader ---
   const handleLoadSample = () => {
-    const sampleCSV = `full_name,email,phone,current_company,title\nJordan Patel,jordan.patel@example.com,+1-555-0101,Netflix,Senior Frontend Engineer`;
-    const sampleATS = `{
-  "fullname": "Sarah Jenkins",
-  "email": "sarah.jenkins@example.com",
-  "phone": "+1-555-0122",
-  "current_company": "Google",
-  "title": "Senior Staff Engineer",
-  "skills": ["TypeScript", "Go", "Kubernetes", "System Design"],
-  "experience": [
-    {
-      "company": "Google",
-      "title": "Senior Staff Engineer",
-      "start": "2019-03",
-      "end": null,
-      "summary": "Tech lead for container orchestration platforms and globally distributed microservices."
-    }
-  ],
-  "projects": [
-    {
-      "name": "KubeScale Orchestrator",
-      "description": "An open source automated scaling agent for Kubernetes workloads that handles flash traffic loads."
-    }
-  ]
-}`;
+    const sampleCSV = `full_name,email,phone,current_company,title,skills
+Jordan Patel,jordan.patel@example.com,+1-555-0101,Netflix,Senior Frontend Engineer,TypeScript,React,Next.js
+Alex Morgan,alex.morgan@example.com,+1-555-0102,Amazon,Backend Engineer,Python,Django,AWS
+Priya Sharma,priya.sharma@example.com,+1-555-0103,Microsoft,DevOps Engineer,Kubernetes,Docker,Terraform
+David Chen,david.chen@example.com,+1-555-0104,Meta,Machine Learning Engineer,Python,TensorFlow,PyTorch
+Jessica Lee,jessica.lee@example.com,+1-555-0105,Apple,Product Manager,Agile,Product Strategy`;
+    const sampleATS = `[
+  {
+    "fullname": "Sarah Jenkins",
+    "email": "sarah.jenkins@example.com",
+    "phone": "+1-555-0122",
+    "current_company": "Google",
+    "title": "Senior Staff Engineer",
+    "skills": ["TypeScript", "Go", "Kubernetes", "System Design"],
+    "experience": [
+      {
+        "company": "Google",
+        "title": "Senior Staff Engineer",
+        "start": "2019-03",
+        "end": null,
+        "summary": "Tech lead for container orchestration platforms and globally distributed microservices."
+      }
+    ],
+    "projects": [
+      {
+        "name": "KubeScale Orchestrator",
+        "description": "An open source automated scaling agent for Kubernetes workloads that handles flash traffic loads."
+      }
+    ]
+  },
+  {
+    "fullname": "Michael Brown",
+    "email": "michael.brown@example.com",
+    "phone": "+1-555-0123",
+    "current_company": "Stripe",
+    "title": "Full Stack Engineer",
+    "skills": ["JavaScript", "React", "Node.js", "PostgreSQL"],
+    "experience": [
+      {
+        "company": "Stripe",
+        "title": "Full Stack Engineer",
+        "start": "2020-05",
+        "end": null,
+        "summary": "Built payment processing APIs and frontends used by millions of businesses."
+      }
+    ],
+    "projects": [
+      {
+        "name": "Stripe Checkout",
+        "description": "Simplified payment integration for developers."
+      }
+    ]
+  }
+]`;
     const sampleGitHub = "https://github.com/torvalds";
     const sampleLinkedIn = `Jordan Patel
 Senior Frontend Engineer at Netflix
@@ -155,8 +188,8 @@ Since then, he has worked at Netflix as a Senior Frontend Engineer. Strong exper
     });
 
     setLogs([
-      "Sample data loaded. All multi-source ingestion channels fully populated with multiple candidate records.",
-      "Ready for real transformation pipeline execution."
+      "Company sample data loaded! Multiple candidate records across multiple sources including multiple candidates!",
+      "Ready for pipeline execution to cluster profiles and rank candidates for open roles!"
     ]);
     setWarnings([]);
   };
@@ -457,41 +490,45 @@ Since then, he has worked at Netflix as a Senior Frontend Engineer. Strong exper
     return <LandingPage onEnterWorkspace={() => setShowLandingPage(false)} />;
   }
 
+  if (mode === 'company') {
+    return (
+      <div className="flex flex-col h-screen bg-[#0B1120] text-slate-100 font-sans antialiased overflow-hidden">
+        <Header
+          onOpenConfig={() => setConfigOpen(true)}
+          onExportWorkflow={() => {}}
+          modelStatus={modelStatus}
+          mode={mode}
+          onModeChange={setMode}
+          companyName="TechCorp Inc."
+        />
+        <CompanyHiringMode onExportReport={() => {}} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-[#0B1120] text-slate-100 font-sans antialiased overflow-hidden">
       
       {/* Header bar */}
-      <Header onOpenConfig={() => setConfigOpen(true)} onExportWorkflow={handleExportWorkflow} modelStatus={modelStatus} />
+      <Header
+        onOpenConfig={() => setConfigOpen(true)}
+        onExportWorkflow={handleExportWorkflow}
+        modelStatus={modelStatus}
+        mode={mode}
+        onModeChange={setMode}
+      />
 
       {/* Main Workspace Frame */}
       <main className="flex-1 overflow-y-auto relative p-4 sm:p-6">
         
-        {/* Candidate Selector (When multiple candidates are loaded) */}
-        {allCandidates.length > 1 && (
-          <div className="max-w-7xl mx-auto mb-4 bg-[#0F172A] border border-slate-800 rounded-xl p-2.5 flex items-center gap-3 overflow-x-auto scrollbar-thin animate-in fade-in duration-300">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 font-mono px-2 shrink-0">
-              Clustered Profiles ({allCandidates.length}):
-            </span>
-            <div className="flex gap-2">
-              {allCandidates.map((c, idx) => (
-                <button
-                  key={c.candidate_id || idx}
-                  onClick={() => handleSelectCandidate(idx)}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all duration-200 flex items-center gap-2 border cursor-pointer ${
-                    activeCandidateIndex === idx
-                      ? 'bg-[#4F46E5]/15 text-[#38BDF8] border-[#4F46E5] shadow-md shadow-indigo-500/10'
-                      : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800/60'
-                  }`}
-                >
-                  <span>{c.full_name}</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold font-mono ${
-                    activeCandidateIndex === idx ? 'bg-[#4F46E5]/30 text-[#38BDF8]' : 'bg-slate-800 text-slate-500'
-                  }`}>
-                    {Math.round(c.overall_confidence * 100)}%
-                  </span>
-                </button>
-              ))}
-            </div>
+        {/* Company Talent Dashboard (When multiple candidates are loaded) */}
+        {allCandidates.length > 0 && (
+          <div className="max-w-7xl mx-auto mb-4 animate-in fade-in duration-300">
+            <CompanyCandidateDashboard 
+              candidates={allCandidates}
+              activeCandidateIndex={activeCandidateIndex}
+              onSelectCandidate={handleSelectCandidate}
+            />
           </div>
         )}
         

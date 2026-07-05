@@ -139,3 +139,69 @@ export interface PipelineResponse {
   trace: PipelineTrace;
   error?: string;
 }
+
+// --- COMPANY MODE TYPES ---
+export enum EducationLevel {
+  ANY = 'Any',
+  BACHELOR = 'Bachelor',
+  MASTER = 'Master'
+}
+
+export interface JobPost {
+  id: string;
+  title: string;
+  department: string;
+  requiredSkills: string[];
+  minExperience: number;
+  educationRequirement: EducationLevel;
+}
+
+export enum Verdict {
+  STRONG_MATCH = 'Strong Match',
+  GOOD_MATCH = 'Good Match',
+  POSSIBLE_MATCH = 'Possible Match',
+  NOT_MATCHED = 'Not Matched'
+}
+
+export interface JobMatchResult {
+  jobId: string;
+  jobTitle: string;
+  score: number; // 0-100
+  skillMatchScore: number; // 0-1
+  experienceScore: number; // 0-1
+  educationScore: number; // 0-1
+  confidenceScore: number; // 0-1
+  verdict: Verdict;
+  matchedSkills: string[];
+  missingSkills: string[];
+}
+
+export interface ProcessedCandidate extends CanonicalCandidate {
+  jobMatches: JobMatchResult[];
+  shortlistedForJobs: string[]; // job IDs
+  rejected: boolean;
+  primarySkill?: string;
+  secondarySkill?: string;
+  sources: string[];
+}
+
+export interface Company {
+  name: string;
+  id: string;
+}
+
+export interface CompanySession {
+  company: Company;
+  jobPosts: JobPost[];
+  candidates: ProcessedCandidate[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export enum BulkSourceType {
+  CSV = 'Recruiter CSV',
+  RESUMES = 'Resume Files',
+  GITHUB = 'GitHub Usernames',
+  LINKEDIN = 'LinkedIn Text Bulk',
+  ATS = 'ATS JSON Bulk'
+}

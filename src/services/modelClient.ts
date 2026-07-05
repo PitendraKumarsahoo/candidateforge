@@ -18,73 +18,140 @@ export interface ModelHealth {
 }
 
 /**
-  * Core In-Process Machine Learning Model Rules in TypeScript.
-  * Replicates the exact behavior of CandidateModel from the Python backend.
-  */
+ * Enhanced In-Process Machine Learning Model Rules in TypeScript.
+ * More realistic, role-specific predictions with better skill extraction!
+ */
 export function predictInProcess(text: string, source: SourceType): ModelPrediction {
   const text_lower = (text || "").toLowerCase();
   
-  const categories: Record<string, string> = {
-    "frontend": "Senior Frontend Engineer",
-    "backend": "Senior Backend Engineer",
-    "fullstack": "Full Stack Engineer",
-    "devops": "DevOps / Infrastructure Engineer",
-    "data": "Data Scientist / Machine Learning Engineer",
-    "product": "Product Manager"
-  };
+  // Enhanced category profiles with detailed role requirements
+  const roleProfiles = [
+    {
+      id: "frontend",
+      title: "Senior Frontend Engineer",
+      keywords: ["react", "vue", "angular", "frontend", "css", "tailwind", "next.js", "nextjs", "typescript", "javascript", "graphql", "redux"],
+      prioritySkills: ["React", "TypeScript", "Next.js", "Tailwind CSS", "GraphQL"]
+    },
+    {
+      id: "backend",
+      title: "Senior Backend Engineer",
+      keywords: ["django", "flask", "spring boot", "springboot", "postgres", "mysql", "backend", "express", "node.js", "python", "java", "go", "rust"],
+      prioritySkills: ["Python", "Go", "Java", "Node.js", "PostgreSQL", "SQL"]
+    },
+    {
+      id: "fullstack",
+      title: "Full Stack Engineer",
+      keywords: ["full stack", "fullstack", "full-stack", "mern", "mean", "react", "node", "express", "mongodb"],
+      prioritySkills: ["React", "Node.js", "JavaScript", "TypeScript", "MongoDB"]
+    },
+    {
+      id: "devops",
+      title: "DevOps / Infrastructure Engineer",
+      keywords: ["docker", "kubernetes", "aws", "azure", "gcp", "devops", "ci/cd", "terraform", "ansible", "jenkins", "gitlab"],
+      prioritySkills: ["Docker", "Kubernetes", "AWS", "Terraform", "System Design"]
+    },
+    {
+      id: "data",
+      title: "Data Scientist / Machine Learning Engineer",
+      keywords: ["machine learning", "data scientist", "ml", "deep learning", "spark", "pytorch", "tensorflow", "scikit-learn", "pandas", "numpy", "nlp"],
+      prioritySkills: ["Python", "Machine Learning", "TensorFlow", "PyTorch", "SQL"]
+    },
+    {
+      id: "product",
+      title: "Product Manager",
+      keywords: ["product manager", "pm", "agile", "scrum", "roadmap", "user research", "mvp", "prd"],
+      prioritySkills: ["Product Strategy", "Agile", "System Design"]
+    }
+  ];
 
-  let category = "Software Engineer"; // Default
-  if (["react", "vue", "frontend", "css", "tailwind", "next.js", "nextjs"].some(w => text_lower.includes(w))) {
-    category = categories["frontend"];
-  } else if (["docker", "kubernetes", "aws", "devops", "ci/cd", "terraform"].some(w => text_lower.includes(w))) {
-    category = categories["devops"];
-  } else if (["machine learning", "data scientist", "ml", "spark", "pytorch", "tensorflow"].some(w => text_lower.includes(w))) {
-    category = categories["data"];
-  } else if (["product manager", "pm", "agile", "roadmap"].some(w => text_lower.includes(w))) {
-    category = categories["product"];
-  } else if (["django", "spring boot", "springboot", "postgres", "backend", "express"].some(w => text_lower.includes(w))) {
-    category = categories["backend"];
-  } else if (["full stack", "fullstack", "node", "typescript"].some(w => text_lower.includes(w))) {
-    category = categories["fullstack"];
-  }
+  // Calculate score for each role
+  let bestRole = roleProfiles.find(r => r.id === "backend")!;
+  let bestScore = 0;
 
-  const skills_db: Record<string, number> = {
-    "Python": 0.95,
-    "Java": 0.92,
+  roleProfiles.forEach(role => {
+    let score = 0;
+    role.keywords.forEach(keyword => {
+      if (text_lower.includes(keyword)) {
+        score += keyword.length > 5 ? 3 : 1;
+      }
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      bestRole = role;
+    }
+  });
+
+  // Enhanced skills database with more skills and realistic confidences
+  const comprehensiveSkills: Record<string, number> = {
+    "Python": 0.96,
+    "Java": 0.91,
     "TypeScript": 0.94,
-    "React": 0.91,
-    "Docker": 0.89,
-    "Kubernetes": 0.88,
-    "AWS": 0.87,
-    "Go": 0.93,
-    "Node.js": 0.90,
-    "Next.js": 0.91,
-    "Tailwind CSS": 0.86,
-    "SQL": 0.85,
-    "System Design": 0.92,
-    "Machine Learning": 0.94
+    "JavaScript": 0.93,
+    "React": 0.92,
+    "Vue": 0.89,
+    "Angular": 0.88,
+    "Docker": 0.90,
+    "Kubernetes": 0.89,
+    "AWS": 0.88,
+    "Azure": 0.85,
+    "GCP": 0.84,
+    "Go": 0.92,
+    "Rust": 0.87,
+    "Node.js": 0.91,
+    "Next.js": 0.90,
+    "Tailwind CSS": 0.87,
+    "CSS": 0.85,
+    "SQL": 0.88,
+    "PostgreSQL": 0.89,
+    "MongoDB": 0.86,
+    "System Design": 0.93,
+    "Machine Learning": 0.95,
+    "TensorFlow": 0.92,
+    "PyTorch": 0.93,
+    "GraphQL": 0.88,
+    "Redux": 0.86,
+    "Terraform": 0.89,
+    "Ansible": 0.85,
+    "Agile": 0.87,
+    "Scrum": 0.85,
+    "Product Strategy": 0.90,
+    "Git": 0.89,
+    "CI/CD": 0.88
   };
 
   const extracted_skills: ModelSkill[] = [];
-  for (const [skill_name, base_conf] of Object.entries(skills_db)) {
+  for (const [skill_name, base_conf] of Object.entries(comprehensiveSkills)) {
     const escaped = skill_name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     const pattern = new RegExp('\\b' + escaped + '\\b', 'i');
     if (pattern.test(text_lower)) {
+      // Boost confidence if skill is a priority for best role
+      let conf = base_conf;
+      if (bestRole.prioritySkills.includes(skill_name)) {
+        conf = Math.min(0.99, conf + 0.05);
+      }
       extracted_skills.push({
         name: skill_name,
-        confidence: base_conf
+        confidence: conf
       });
     }
   }
 
-  const match_count = extracted_skills.length;
-  const model_confidence = Math.min(0.98, Math.max(0.65, 0.65 + (match_count * 0.05)));
+  // Sort skills by confidence descending
+  extracted_skills.sort((a, b) => b.confidence - a.confidence);
+
+  // Calculate dynamic model confidence
+  let model_confidence = 0.6;
+  if (bestScore > 0) {
+    model_confidence += Math.min(0.25, bestScore * 0.03);
+  }
+  model_confidence += Math.min(0.2, extracted_skills.length * 0.02);
+  model_confidence = Math.min(0.98, Math.max(0.6, model_confidence));
 
   return {
-    predicted_category: category,
-    extracted_skills,
+    predicted_category: bestRole.title,
+    extracted_skills: extracted_skills.slice(0, 12), // Top 12 skills
     model_confidence,
-    model_version: "1.0.0-integrated-ts"
+    model_version: "2.0.0-enhanced"
   };
 }
 

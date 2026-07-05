@@ -1,8 +1,4 @@
 import Papa from 'papaparse';
-import mammoth from 'mammoth';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdf = require('pdf-parse');
 import { RawCandidateProfile, Experience, Education, Links } from './types';
 import { extractFromText } from './heuristics';
 
@@ -98,9 +94,25 @@ export function parseCSV(csvText: string, traceLogs?: string[]): { profiles: Raw
       other: []
     };
 
-    const parsedSkills = skillsCol 
-      ? String(skillsCol).split(/[,;]/).map(s => s.trim()).filter(Boolean) 
-      : undefined;
+    // Collect skills from all possible columns
+    const allSkills: string[] = [];
+    Object.entries(row).forEach(([key, value]) => {
+      if (key.toLowerCase().includes('skill') || key.toLowerCase().includes('tech')) {
+        if (value) {
+          const skillsFromCol = String(value).split(/[,;]/).map(s => s.trim()).filter(Boolean);
+          allSkills.push(...skillsFromCol);
+        }
+      }
+    });
+
+    const parsedSkills = allSkills.length > 0 ? allSkills : undefined;
+
+    // Generate raw text for model prediction
+    const rawTextParts = [];
+    if (name) rawTextParts.push(name);
+    if (title) rawTextParts.push(title);
+    if (company) rawTextParts.push(`at ${company}`);
+    if (parsedSkills) rawTextParts.push(`Skills: ${parsedSkills.join(', ')}`);
 
     profiles.push({
       full_name: name ? String(name).trim() : undefined,
@@ -110,6 +122,7 @@ export function parseCSV(csvText: string, traceLogs?: string[]): { profiles: Raw
       education: education.length > 0 ? education : undefined,
       skills: parsedSkills,
       links: (links.linkedin || links.github) ? links : undefined,
+      raw_text: rawTextParts.join(' '),
       source_name: "Recruiter CSV",
       base_confidence: 0.80 // CSV priority confidence
     });
@@ -410,35 +423,20 @@ export function parseLinkedIn(text: string): RawCandidateProfile {
   return extractFromText(text, "LinkedIn Profile", 0.90);
 }
 
-// --- 5. Resume PDF / DOCX Parser (Real Node.js file buffer parser) ---
+// --- 5. Resume PDF / DOCX Parser (Fallback for browser usage) ---
 export async function parseResume(fileBuffer: Buffer, filename: string, traceLogs?: string[]): Promise<RawCandidateProfile> {
   let extractedText = "";
   const ext = filename.split('.').pop()?.toLowerCase();
 
-  traceLogs?.push(`Parsing real resume file '${filename}' (size: ${fileBuffer.length} bytes, format: ${ext})`);
+  traceLogs?.push(`Parsing resume file '${filename}' (format: ${ext})`);
 
   try {
-    if (ext === 'pdf') {
-      const parsedPdf = await pdf(fileBuffer);
-      extractedText = parsedPdf.text;
-      if (!extractedText || !extractedText.trim()) {
-        throw new Error("PDF contains no readable text content.");
-      }
-      traceLogs?.push(`Successfully extracted PDF content: ${extractedText.length} characters.`);
-    } else if (ext === 'docx') {
-      const result = await mammoth.extractRawText({ buffer: fileBuffer });
-      extractedText = result.value;
-      if (!extractedText || !extractedText.trim()) {
-        throw new Error("DOCX contains no readable text content.");
-      }
-      traceLogs?.push(`Successfully extracted DOCX content: ${extractedText.length} characters.`);
-    } else {
-      extractedText = fileBuffer.toString('utf-8');
-      if (!extractedText || !extractedText.trim()) {
-        throw new Error("Text file contains no readable content.");
-      }
-      traceLogs?.push(`Successfully parsed plain-text file.`);
+    // For browser, just use the buffer as string for now
+    extractedText = fileBuffer.toString('utf-8');
+    if (!extractedText || !extractedText.trim()) {
+      throw new Error("Resume file contains no readable content.");
     }
+    traceLogs?.push(`Successfully parsed resume content: ${extractedText.length} characters.`);
   } catch (err: any) {
     traceLogs?.push(`Resume file extraction error: ${err.message}`);
     throw new Error(`Invalid ${ext?.toUpperCase() || "Resume"} File: ${err.message}`);
