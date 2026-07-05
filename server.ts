@@ -73,7 +73,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     console.log("Starting server in PRODUCTION mode...");
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), 'dist/client');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
