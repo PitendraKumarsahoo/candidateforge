@@ -50,6 +50,15 @@ async def startup_event():
     else:
         logger.error("FastAPI failed to load candidate model. Model endpoints will degrade to 503.")
 
+@app.get("/")
+async def root():
+    """Root endpoint returning service identity."""
+    return {
+        "service": "CandidateForge ML Model Serving Server",
+        "status": "running",
+        "health_check_url": "/api/health"
+    }
+
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint to report API status and model state."""

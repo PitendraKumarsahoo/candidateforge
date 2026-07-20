@@ -575,6 +575,10 @@ export function mergeProfiles(
     overall_confidence = Math.round(((overall_confidence + avgModelConf) / 2) * 100) / 100;
   }
 
+  // Find if any raw profile has an agent_decision
+  const decisionProfile = sortedProfiles.find(p => p.agent_decision !== undefined);
+  const agent_decision = decisionProfile ? decisionProfile.agent_decision : undefined;
+
   traceLogs?.push(`Candidate Merge complete. Computed overall confidence score dynamically: ${Math.round(overall_confidence * 100)}% (Valid fields: ${validFieldsCount}/${totalFieldsCount})`);
 
   return {
@@ -591,6 +595,7 @@ export function mergeProfiles(
     education: canonicalEdu,
     projects: canonicalProjects,
     provenance,
-    overall_confidence
+    overall_confidence,
+    agent_decision
   };
 }

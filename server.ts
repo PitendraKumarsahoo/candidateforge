@@ -1,12 +1,14 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { runPipeline } from './src/pipeline/engine';
 import { predictInProcess } from './src/services/modelClient';
+import { getHiringDecision } from './src/services/qwenAgent';
 
 async function startServer() {
   const app = express();
-  const PORT = 3001;
+  const port = process.env.FC_SERVER_PORT || process.env.PORT || 9000;
 
   // Set limits higher to support large base64 file uploads (PDF/DOCX)
   app.use(express.json({ limit: '50mb' }));
@@ -27,6 +29,24 @@ async function startServer() {
       res.status(500).json({
         success: false,
         error: error.message || "An internal error occurred running the candidate pipeline."
+      });
+    }
+  });
+
+  // HireFlow Screening Agent Decision Endpoint
+  app.post('/api/agent/screen', async (req, res) => {
+    try {
+      const { resumeText, jobDescription, mlScore } = req.body;
+      if (!resumeText) {
+        return res.status(400).json({ error: "Missing resumeText" });
+      }
+      const decision = await getHiringDecision(resumeText, jobDescription || "", Number(mlScore || 0));
+      res.json(decision);
+    } catch (error: any) {
+      console.error("Error in HireFlow agent screening endpoint:", error);
+      res.status(500).json({
+        error: "Failed to obtain hiring decision from screening agent.",
+        details: error.message
       });
     }
   });
@@ -80,8 +100,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`CandidateForge backend server running on http://0.0.0.0:${PORT}`);
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
   });
 }
 

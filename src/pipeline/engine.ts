@@ -10,9 +10,9 @@ import {
   parseATSJson, 
   parseGitHub, 
   parseLinkedIn, 
-  parseResume, 
   parseNotes 
 } from './parsers';
+import { parseResume } from './resumeParser';
 import { mergeProfiles } from './merger';
 import { validateCandidate } from './validator';
 import { projectCandidate } from './projector';
@@ -205,6 +205,7 @@ export async function runPipeline(request: PipelineRequest): Promise<PipelineRes
           profile.model_category = prediction.predicted_category || undefined;
           profile.model_confidence = prediction.model_confidence;
           profile.model_version = prediction.model_version;
+          profile.agent_decision = prediction.agent_decision;
 
           if (prediction.extracted_skills && prediction.extracted_skills.length > 0) {
             profile.model_skills = prediction.extracted_skills.map(s => ({

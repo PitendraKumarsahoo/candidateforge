@@ -6,7 +6,9 @@ import {
   JobPost,
   ProcessedCandidate,
   RawCandidateProfile,
-  CompanySession
+  CompanySession,
+  CanonicalCandidate,
+  EducationLevel
 } from '../pipeline/types';
 import {
   calculateJobMatch,
@@ -25,8 +27,8 @@ export default function CompanyHiringMode({ onExportReport }: CompanyHiringModeP
   // State
   const [company, setCompany] = useState<Company>({ name: 'TechCorp Inc.', id: generateId() });
   const [jobPosts, setJobPosts] = useState<JobPost[]>([
-    { id: generateId(), title: 'Senior Frontend Engineer', department: 'Engineering', requiredSkills: ['React', 'TypeScript', 'Next.js', 'CSS'], minExperience: 3, educationRequirement: 'Bachelor' },
-    { id: generateId(), title: 'Backend Engineer', department: 'Engineering', requiredSkills: ['Python', 'Django', 'PostgreSQL', 'AWS'], minExperience: 2, educationRequirement: 'Any' }
+    { id: generateId(), title: 'Senior Frontend Engineer', department: 'Engineering', requiredSkills: ['React', 'TypeScript', 'Next.js', 'CSS'], minExperience: 3, educationRequirement: EducationLevel.BACHELOR },
+    { id: generateId(), title: 'Backend Engineer', department: 'Engineering', requiredSkills: ['Python', 'Django', 'PostgreSQL', 'AWS'], minExperience: 2, educationRequirement: EducationLevel.ANY }
   ]);
   const [candidates, setCandidates] = useState<ProcessedCandidate[]>([]);
   const [activeJobId, setActiveJobId] = useState<string>(jobPosts[0]?.id || '');
@@ -178,28 +180,56 @@ export default function CompanyHiringMode({ onExportReport }: CompanyHiringModeP
       const processedCandidates: ProcessedCandidate[] = [];
       for (let i = 0; i < rawProfiles.length; i++) {
         const rawProfile = rawProfiles[i];
+        const candidate_id = generateId();
+        const full_name = rawProfile.full_name || 'Unknown Candidate';
+        const emails = rawProfile.emails || [];
+        const phones = rawProfile.phones || [];
+        const location = {
+          city: rawProfile.location?.city || '',
+          region: rawProfile.location?.region || '',
+          country: rawProfile.location?.country || ''
+        };
+        const links = {
+          linkedin: rawProfile.links?.linkedin || null,
+          github: rawProfile.links?.github || null,
+          portfolio: rawProfile.links?.portfolio || null,
+          other: rawProfile.links?.other || []
+        };
+        const headline = rawProfile.headline || null;
+        const years_experience = rawProfile.years_experience || null;
+        const skills = rawProfile.skills?.map(name => ({ name, confidence: 0.85, verified: false, sources: [rawProfile.source_name] })) || [];
+        const experience = rawProfile.experience || [];
+        const education = rawProfile.education || [];
+        const projects = rawProfile.projects || [];
+        const provenance: any[] = [];
+        const overall_confidence = rawProfile.base_confidence || 0.85;
+        const primarySkill = rawProfile.skills?.[0];
+        const secondarySkill = rawProfile.skills?.[1];
+        const sources = rawProfile.source_name ? [rawProfile.source_name] : [];
+
+        const candidateToMatch: CanonicalCandidate & { primarySkill?: string; secondarySkill?: string } = {
+          candidate_id,
+          full_name,
+          emails,
+          phones,
+          location,
+          links,
+          headline,
+          years_experience,
+          skills,
+          experience,
+          education,
+          projects,
+          provenance,
+          overall_confidence,
+          primarySkill,
+          secondarySkill
+        };
+
         const processed: ProcessedCandidate = {
-          candidate_id: generateId(),
-          full_name: rawProfile.full_name || 'Unknown Candidate',
-          emails: rawProfile.emails || [],
-          phones: rawProfile.phones || [],
-          location: rawProfile.location,
-          links: rawProfile.links,
-          headline: rawProfile.headline,
-          years_experience: rawProfile.years_experience,
-          skills: rawProfile.skills?.map(name => ({ name, confidence: 0.85, verified: false, sources: [rawProfile.source_name] })) || [],
-          experience: rawProfile.experience || [],
-          education: rawProfile.education || [],
-          projects: [],
-          provenance: [],
-          overall_confidence: rawProfile.base_confidence || 0.85,
-          primarySkill: rawProfile.skills?.[0],
-          secondarySkill: rawProfile.skills?.[1],
-          sources: rawProfile.source_name ? [rawProfile.source_name] : [],
-          jobMatches: jobPosts.map(job => calculateJobMatch(
-            { ...rawProfile, skills: rawProfile.skills?.map(name => ({ name, confidence: 0.85, verified: false, sources: [] })) || [] },
-            job
-          )),
+          ...candidateToMatch,
+          sources,
+          jobMatches: jobPosts.map(job => calculateJobMatch(candidateToMatch, job)),
           shortlistedForJobs: [],
           rejected: false
         };
@@ -309,7 +339,7 @@ export default function CompanyHiringMode({ onExportReport }: CompanyHiringModeP
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Company Onboarding Panel */}

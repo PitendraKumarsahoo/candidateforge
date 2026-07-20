@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CanonicalCandidate } from '../pipeline/types';
 import ConfidenceRing from './ConfidenceRing';
+import { DEFAULT_JOB_DESCRIPTIONS } from '../services/modelClient';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { 
@@ -24,7 +25,11 @@ import {
   AlertTriangle,
   User,
   PlusCircle,
-  Eye
+  Eye,
+  Bot,
+  XCircle,
+  Calendar,
+  Clock
 } from 'lucide-react';
 
 interface OutputViewerPanelProps {
@@ -50,6 +55,80 @@ export default function OutputViewerPanel({
   const [jsonTab, setJsonTab] = useState<'canonical' | 'projected' | 'editor' | 'diff'>('canonical');
   const [downloadOpen, setDownloadOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isScreeningLoading, setIsScreeningLoading] = useState(false);
+  const [screeningError, setScreeningError] = useState<string | null>(null);
+
+  const compileResumeText = (c: CanonicalCandidate): string => {
+    let text = `Name: ${c.full_name}\n`;
+    if (c.headline) text += `Headline: ${c.headline}\n`;
+    if (c.years_experience !== null) text += `Years of Experience: ${c.years_experience}\n`;
+    
+    text += `\nSkills:\n` + c.skills.map(s => s.name).join(', ') + `\n`;
+    
+    if (c.experience.length > 0) {
+      text += `\nWork Experience:\n`;
+      c.experience.forEach(e => {
+        text += `- ${e.title} at ${e.company} (${e.start} - ${e.end || 'Present'})\n  ${e.summary || ''}\n`;
+      });
+    }
+    
+    if (c.education.length > 0) {
+      text += `\nEducation:\n`;
+      c.education.forEach(edu => {
+        text += `- ${edu.degree} in ${edu.field} from ${edu.institution} (Graduated: ${edu.end_year || 'N/A'})\n`;
+      });
+    }
+    
+    if (c.projects.length > 0) {
+      text += `\nProjects:\n`;
+      c.projects.forEach(p => {
+        text += `- ${p.name}: ${p.description || ''}\n`;
+      });
+    }
+    
+    return text;
+  };
+
+  const handleRunScreening = async () => {
+    if (!candidate || !onCandidateChange) return;
+    
+    setIsScreeningLoading(true);
+    setScreeningError(null);
+    
+    try {
+      const resumeText = compileResumeText(candidate);
+      const category = candidate.headline || "Senior Frontend Engineer";
+      const jobDescription = DEFAULT_JOB_DESCRIPTIONS[category] || DEFAULT_JOB_DESCRIPTIONS["Senior Frontend Engineer"];
+      const mlScore = Math.round(candidate.overall_confidence * 100);
+      
+      const res = await fetch('/api/agent/screen', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          resumeText,
+          jobDescription,
+          mlScore
+        })
+      });
+      
+      if (!res.ok) {
+        throw new Error(`Screening failed: Server returned error status ${res.status}`);
+      }
+      
+      const decision = await res.json();
+      onCandidateChange({
+        ...candidate,
+        agent_decision: decision
+      });
+    } catch (err: any) {
+      console.error("Screening Agent Run Error:", err);
+      setScreeningError(err.message || "Failed to contact screening agent.");
+    } finally {
+      setIsScreeningLoading(false);
+    }
+  };
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -460,6 +539,139 @@ ${c.education.map(edu => `- **${edu.degree}** in *${edu.field}* from **${edu.ins
             <ConfidenceRing confidence={candidate.overall_confidence} size={100} />
           </div>
         </div>
+
+        {/* HireFlow Autonomous Agent Screening Report Card */}
+        {candidate.agent_decision ? (
+          <div className="bg-[#0F172A]/90 border border-indigo-500/20 rounded-xl p-5 shadow-lg space-y-4 relative overflow-hidden">
+            {/* Ambient Background Glow effect for premium look */}
+            <div className="absolute -right-24 -top-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bot className="text-indigo-400 animate-pulse animate-duration-3000" size={18} />
+                <h4 className="text-[10px] text-indigo-300 font-bold tracking-widest uppercase">
+                  HireFlow Screening Agent Report
+                </h4>
+              </div>
+              <span className="text-[8px] text-slate-500 font-mono tracking-wider uppercase bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+                Autopilot Track 4 Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+              {/* Left Side: Large Badge decision outcome */}
+              <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-[#0B1120] border border-slate-800 rounded-lg space-y-2 text-center">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Screening Decision</span>
+                {candidate.agent_decision.decision === 'shortlist' && (
+                  <div className="flex flex-col items-center space-y-1">
+                    <CheckCircle className="text-emerald-400 shrink-0" size={32} />
+                    <span className="text-xs font-bold uppercase tracking-widest px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400">
+                      Shortlisted
+                    </span>
+                  </div>
+                )}
+                {candidate.agent_decision.decision === 'reject' && (
+                  <div className="flex flex-col items-center space-y-1">
+                    <XCircle className="text-rose-400 shrink-0" size={32} />
+                    <span className="text-xs font-bold uppercase tracking-widest px-3 py-1 bg-rose-500/10 border border-rose-500/20 rounded-full text-rose-400">
+                      Rejected
+                    </span>
+                  </div>
+                )}
+                {candidate.agent_decision.decision === 'human_review' && (
+                  <div className="flex flex-col items-center space-y-1">
+                    <AlertTriangle className="text-amber-400 shrink-0" size={32} />
+                    <span className="text-xs font-bold uppercase tracking-widest px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-400">
+                      Human Review
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Center Side: Confidence progress bar & ML Agreement */}
+              <div className="md:col-span-8 space-y-3 col-span-1 min-w-0">
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[10px] font-bold uppercase">
+                    <span className="text-slate-400 tracking-wider">Agent Confidence</span>
+                    <span className="text-white font-mono">{candidate.agent_decision.confidence}%</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        candidate.agent_decision.decision === 'shortlist' ? 'bg-emerald-500' :
+                        candidate.agent_decision.decision === 'reject' ? 'bg-rose-500' : 'bg-amber-500'
+                      }`}
+                      style={{ width: `${candidate.agent_decision.confidence}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-[10px] text-slate-300">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500">ML Score Agreement:</span>
+                    <span className={`font-semibold uppercase px-1.5 py-0.5 rounded text-[9px] border ${
+                      candidate.agent_decision.ml_score_agreement === 'agree' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                      candidate.agent_decision.ml_score_agreement === 'disagree' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                    }`}>
+                      {candidate.agent_decision.ml_score_agreement}
+                    </span>
+                  </div>
+
+                  {candidate.agent_decision.suggested_slot && (
+                    <div className="flex items-center gap-1.5 text-[#22D3EE]">
+                      <Calendar size={12} />
+                      <span className="text-[10px] text-slate-500">Suggested Slot:</span>
+                      <span className="font-semibold text-[#22D3EE]">{candidate.agent_decision.suggested_slot}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Explanation / Reasoning block */}
+            <div className="bg-[#0B1120] border border-slate-800/80 rounded-lg p-3.5 space-y-1.5">
+              <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">Decision Reasoning</span>
+              <p className="text-xs text-slate-300 leading-relaxed font-sans font-normal">
+                {candidate.agent_decision.reason}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-[#0F172A]/40 border border-slate-800/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+            <div className="flex items-center gap-3">
+              <Bot className={`text-slate-600 ${isScreeningLoading ? 'animate-spin text-indigo-400' : 'animate-pulse'}`} size={20} />
+              <div>
+                <h4 className="text-xs font-bold text-slate-400">
+                  {isScreeningLoading ? 'HireFlow Screening Agent: Running LLM Verdict...' : 'HireFlow Screening Agent Offline'}
+                </h4>
+                <p className="text-[10px] text-slate-500">
+                  {screeningError ? (
+                    <span className="text-rose-400 font-semibold">{screeningError}</span>
+                  ) : (
+                    'Analyze candidate qualification and role match using the Qwen autonomous agent.'
+                  )}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleRunScreening}
+              disabled={isScreeningLoading}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-md ${
+                isScreeningLoading
+                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer active:scale-95'
+              }`}
+            >
+              {isScreeningLoading ? (
+                <>
+                  <RefreshCw className="animate-spin" size={12} /> Running...
+                </>
+              ) : (
+                'Run Agent'
+              )}
+            </button>
+          </div>
+        )}
 
         {/* View Selection Bar with all interactive toggles */}
         <div className="space-y-2">

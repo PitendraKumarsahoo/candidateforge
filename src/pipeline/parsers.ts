@@ -423,28 +423,6 @@ export function parseLinkedIn(text: string): RawCandidateProfile {
   return extractFromText(text, "LinkedIn Profile", 0.90);
 }
 
-// --- 5. Resume PDF / DOCX Parser (Fallback for browser usage) ---
-export async function parseResume(fileBuffer: Buffer, filename: string, traceLogs?: string[]): Promise<RawCandidateProfile> {
-  let extractedText = "";
-  const ext = filename.split('.').pop()?.toLowerCase();
-
-  traceLogs?.push(`Parsing resume file '${filename}' (format: ${ext})`);
-
-  try {
-    // For browser, just use the buffer as string for now
-    extractedText = fileBuffer.toString('utf-8');
-    if (!extractedText || !extractedText.trim()) {
-      throw new Error("Resume file contains no readable content.");
-    }
-    traceLogs?.push(`Successfully parsed resume content: ${extractedText.length} characters.`);
-  } catch (err: any) {
-    traceLogs?.push(`Resume file extraction error: ${err.message}`);
-    throw new Error(`Invalid ${ext?.toUpperCase() || "Resume"} File: ${err.message}`);
-  }
-
-  // Extract candidate profile via our heuristics engine
-  return extractFromText(extractedText, `Resume (${ext?.toUpperCase() || "File"})`, 0.95);
-}
 
 // --- 6. Recruiter Notes Parser ---
 export function parseNotes(text: string): RawCandidateProfile {

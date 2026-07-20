@@ -46,6 +46,14 @@ export interface Project {
   description: string;
 }
 
+export interface AgentDecision {
+  decision: 'shortlist' | 'reject' | 'human_review';
+  confidence: number;
+  reason: string;
+  ml_score_agreement: 'agree' | 'disagree' | 'partial';
+  suggested_slot: string | null;
+}
+
 export interface CanonicalCandidate {
   candidate_id: string;
   full_name: string;
@@ -61,6 +69,7 @@ export interface CanonicalCandidate {
   projects: Project[];
   provenance: ProvenanceEntry[];
   overall_confidence: number;
+  agent_decision?: AgentDecision;
 }
 
 // Intermediate profile returned by individual parsers before merging
@@ -83,6 +92,7 @@ export interface RawCandidateProfile {
   model_category?: string; // Optional model-predicted category
   model_skills?: { name: string; confidence: number }[]; // Skills extracted by the ML model
   model_version?: string; // Optional model version
+  agent_decision?: AgentDecision;
 }
 
 // Runtime Configuration matching instructions

@@ -1,3 +1,5 @@
+import { AgentDecision } from '../pipeline/types';
+
 export type SourceType = 'resume' | 'notes' | 'linkedin' | 'csv' | 'ats' | 'github';
 
 export interface ModelSkill {
@@ -10,12 +12,69 @@ export interface ModelPrediction {
   extracted_skills: ModelSkill[];
   model_confidence: number;
   model_version: string;
+  agent_decision?: AgentDecision;
 }
 
 export interface ModelHealth {
   status: string;
   model_loaded: boolean;
 }
+
+export const DEFAULT_JOB_DESCRIPTIONS: Record<string, string> = {
+  "Senior Frontend Engineer": `Role: Senior Frontend Engineer
+Requirements:
+- 3+ years of experience with React, TypeScript, and Next.js.
+- Strong knowledge of modern CSS frameworks (Tailwind, etc.).`,
+  "Senior Backend Engineer": `Role: Senior Backend Engineer
+Requirements:
+- 3+ years of experience with Python, Spring Boot, Django, or Go.
+- Solid experience in Database Design (PostgreSQL/MySQL).`,
+  "Full Stack Engineer": `Role: Full Stack Engineer
+Requirements:
+- 3+ years of experience in JavaScript/TypeScript, React, Node.js.
+- Familiarity with SQL and NoSQL databases.`,
+  "DevOps / Infrastructure Engineer": `Role: DevOps / Infrastructure Engineer
+Requirements:
+- Experience with Docker, Kubernetes, AWS/GCP, and Terraform.
+- Strong knowledge of CI/CD pipelines.`,
+  "Data Scientist / Machine Learning Engineer": `Role: Data Scientist / Machine Learning Engineer
+Requirements:
+- Strong knowledge of Machine Learning algorithms.
+- Experience with Python, PyTorch, TensorFlow, and Pandas.`,
+  "Product Manager": `Role: Product Manager
+Requirements:
+- 3+ years of experience in Product Management.
+- Strong product strategy, roadmap definition, and Agile methodology.`
+};
+
+export const SYSTEM_PROMPT = `You are HireFlow Agent, an autonomous hiring-workflow agent built for the Autopilot Agent track.
+
+ROLE:
+You screen candidate resumes against a job description and decide the next workflow action. You work alongside a Random Forest ML pre-filter score (0-100) that estimates candidate-role fit based on structured features (skills match, experience years, education).
+
+DECISION RULES:
+1. If ML score >= 75 AND resume clearly meets core job requirements → "shortlist"
+2. If ML score <= 30 AND resume clearly lacks core requirements → "reject"
+3. If ML score is 31-74, OR ML score and your own reading of the resume disagree by a wide margin, OR the resume shows strong qualitative signals a numeric score can't capture (e.g. relevant open-source work, career switchers, non-traditional background) → "human_review"
+
+REASONING STEPS (do this internally, then output only the final JSON):
+1. Extract candidate's key skills, years of experience, and education from the resume.
+2. Compare against the job description's required and preferred qualifications.
+3. Cross-check your assessment against the given ML score — note any disagreement.
+4. Decide: shortlist / reject / human_review, using the rules above.
+5. If shortlist, propose a suggested interview slot (business hours, next 3 business days, IST).
+
+OUTPUT FORMAT — respond with ONLY this JSON, no markdown, no explanation outside it:
+{
+  "decision": "shortlist" | "reject" | "human_review",
+  "confidence": <number 0-100>,
+  "reason": "<2-3 sentence explanation citing specific resume evidence>",
+  "ml_score_agreement": "agree" | "disagree" | "partial",
+  "suggested_slot": "<business day + time in IST, or null if not shortlisted>"
+}
+
+Never fabricate candidate details not present in the resume. If the resume text is empty or unreadable, return decision "human_review" with reason stating the resume could not be parsed.`;
+
 
 /**
  * Enhanced In-Process Machine Learning Model Rules in TypeScript.
@@ -196,9 +255,81 @@ export async function pingModelHealth(): Promise<boolean> {
   }
 }
 
+export async function callAgentScreening(
+  resumeText: string,
+  mlScore: number,
+  jobDescription: string
+): Promise<AgentDecision> {
+  const envKey = (typeof process !== "undefined" ? process.env?.DASHSCOPE_API_KEY : undefined) || (import.meta as any).env?.VITE_DASHSCOPE_API_KEY;
+  const apiKey = (envKey || "sk-ws-H.XILEHL.BvJ0.MEUCIFGpiPHn502HoIoAjJCYHBQXhoylaZt2X6Kv4Eu0xDTiAiEAuKoTgJvFo7DwS4K6phZEs1Nq3q1GIjd7AIfxVGkjY48").trim();
+  const baseURL = "https://ws-193kp7aik92xszex.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1";
+
+  if (!resumeText || !resumeText.trim()) {
+    return {
+      decision: "human_review",
+      confidence: 95,
+      reason: "The resume text is empty or unreadable, making it impossible to verify skills and qualifications.",
+      ml_score_agreement: "agree",
+      suggested_slot: null
+    };
+  }
+
+  try {
+    const userContent = `ML Pre-Filter Score: ${mlScore}\n\nResume:\n${resumeText}\n\nJob Description:\n${jobDescription}`;
+    const response = await fetch(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "qwen-plus-character",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent }
+        ],
+        temperature: 0.3
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`MaaS API responded with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    let content = data.choices[0].message.content.trim();
+    
+    // Clean markdown code block wraps if present
+    if (content.startsWith("```")) {
+      content = content.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+    }
+
+    const parsed = JSON.parse(content);
+    return {
+      decision: parsed.decision || "human_review",
+      confidence: typeof parsed.confidence === "number" ? parsed.confidence : 80,
+      reason: parsed.reason || "Processed by HireFlow screening agent.",
+      ml_score_agreement: parsed.ml_score_agreement || "agree",
+      suggested_slot: parsed.suggested_slot || null
+    };
+  } catch (error: any) {
+    console.error("Agent Screening API call failed:", error);
+    // Sensible local fallback based on ML Score
+    const decision = mlScore >= 75 ? "shortlist" : mlScore <= 30 ? "reject" : "human_review";
+    return {
+      decision,
+      confidence: 70,
+      reason: `Offline Heuristic: Screened candidate based on ML pre-filter score of ${mlScore}. Detailed LLM analysis was skipped.`,
+      ml_score_agreement: "agree",
+      suggested_slot: decision === "shortlist" ? "Tomorrow, 10:00 AM IST" : null
+    };
+  }
+}
+
 /**
  * Sends candidate profile text to the ML model server for category classification
  * and skill extraction. Falls back to integrated TS classifier if the server is offline.
+ * Subsequently, invokes the HireFlow screening agent to run decision logic.
  */
 export async function callModelPredict(text: string, source: SourceType): Promise<ModelPrediction> {
   const apiBase = getModelApiUrl();
@@ -206,6 +337,8 @@ export async function callModelPredict(text: string, source: SourceType): Promis
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for inference
+
+  let prediction: ModelPrediction;
 
   try {
     const response = await fetch(url, {
@@ -228,7 +361,7 @@ export async function callModelPredict(text: string, source: SourceType): Promis
     }
 
     const data = await response.json();
-    return {
+    prediction = {
       predicted_category: data.predicted_category,
       extracted_skills: data.extracted_skills || [],
       model_confidence: data.model_confidence,
@@ -238,6 +371,21 @@ export async function callModelPredict(text: string, source: SourceType): Promis
     clearTimeout(timeoutId);
     // Graceful fallback to integrated TS classifier
     console.log("Model server offline or errored. Using integrated TS classifier...");
-    return predictInProcess(text, source);
+    prediction = predictInProcess(text, source);
   }
+
+  // Run the HireFlow screening agent using Qwen
+  try {
+    const mlScore = Math.round((prediction.model_confidence || 0.8) * 100);
+    const category = prediction.predicted_category || "Senior Frontend Engineer";
+    const jobDescription = DEFAULT_JOB_DESCRIPTIONS[category] || DEFAULT_JOB_DESCRIPTIONS["Senior Frontend Engineer"];
+
+    const agentDecision = await callAgentScreening(text, mlScore, jobDescription);
+    prediction.agent_decision = agentDecision;
+  } catch (agentErr) {
+    console.error("Failed to run HireFlow screening agent:", agentErr);
+  }
+
+  return prediction;
 }
+
